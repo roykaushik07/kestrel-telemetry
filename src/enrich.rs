@@ -1,13 +1,15 @@
 use std::time::Duration;
 
-use kestrel_contracts::{Mission, TelemetryFrame};
+use kestrel_contracts::{Mission, Position, TelemetryFrame};
 use moka::future::Cache;
 
+use crate::mavlink::DecodedFrame;
 use crate::settings::Dispatch;
 
 /// Resolves the active mission for a drone via dispatch's internal API and
-/// stamps it on the frame. Lookups are cached briefly; on timeout the frame
-/// goes out un-enriched rather than stalling the pipeline.
+/// builds the contract `TelemetryFrame`. Lookups are cached briefly. A drone
+/// with no active mission (or an unreachable dispatch) yields no frame: the
+/// contract requires a mission id, so such frames are dropped with a log line.
 pub struct Enricher {
     http: reqwest::Client,
     base: String,
@@ -23,13 +25,31 @@ impl Enricher {
         Ok(Self { http, base: cfg.url.trim_end_matches('/').to_string(), cache })
     }
 
-    pub async fn enrich(&self, mut frame: TelemetryFrame) -> TelemetryFrame {
+    pub async fn enrich(&self, frame: DecodedFrame) -> Option<TelemetryFrame> {
         let drone = frame.drone_id.clone();
-        frame.mission_id = self
-            .cache
-            .get_with(drone.clone(), async { self.lookup(&drone).await })
-            .await;
-        frame
+        let mission_id = self.cache.get_with(drone.clone(), async { self.lookup(&drone).await }).await;
+        let Some(mission_id) = mission_id else {
+            tracing::info!(drone_id = %drone, "no active mission, dropping frame");
+            return None;
+        };
+        Some(TelemetryFrame {
+            drone_id: frame.drone_id,
+            mission_id,
+            timestamp: frame.observed_at,
+            position: Position {
+                latitude: frame.lat,
+                longitude: frame.lon,
+                altitude_meters: frame.alt_m,
+                hdop: None,
+            },
+            ground_speed_ms: Some(frame.speed_ms),
+            heading_degrees: Some(frame.heading_deg),
+            battery_percent: frame.battery_percent,
+            battery_voltage: frame.battery_voltage,
+            payload_temp_celsius: frame.payload_temp_celsius,
+            payload_door_closed: None,
+            link_quality: None,
+        })
     }
 
     async fn lookup(&self, drone_id: &str) -> Option<String> {

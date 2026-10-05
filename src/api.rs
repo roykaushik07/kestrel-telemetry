@@ -9,21 +9,21 @@ use kestrel_contracts::TelemetryFrame;
 
 /// Per-drone ring of recent frames, trimmed by age. Backs the console live map.
 pub struct HotWindow {
-    window_ms: u64,
+    window_ms: i64,
     frames: Mutex<HashMap<String, VecDeque<TelemetryFrame>>>,
 }
 
 impl HotWindow {
     pub fn new(window_secs: u64) -> Self {
-        Self { window_ms: window_secs * 1000, frames: Mutex::new(HashMap::new()) }
+        Self { window_ms: window_secs as i64 * 1000, frames: Mutex::new(HashMap::new()) }
     }
 
     pub fn push(&self, frame: TelemetryFrame) {
         let mut guard = self.frames.lock().unwrap();
         let ring = guard.entry(frame.drone_id.clone()).or_default();
-        let newest = frame.observed_at_ms;
+        let newest = frame.timestamp;
         ring.push_back(frame);
-        while ring.front().is_some_and(|f| newest.saturating_sub(f.observed_at_ms) > self.window_ms) {
+        while ring.front().is_some_and(|f| (newest - f.timestamp).num_milliseconds() > self.window_ms) {
             ring.pop_front();
         }
     }

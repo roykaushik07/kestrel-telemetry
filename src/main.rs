@@ -24,6 +24,8 @@ async fn main() -> anyhow::Result<()> {
     let enricher = enrich::Enricher::new(&settings.dispatch)?;
     let producer = kafka::TelemetryProducer::new(&settings.kafka)?;
 
+    let mut assembler = mavlink::Assembler::default();
+
     let (raw_tx, mut raw_rx) = mpsc::channel::<mqtt::RawFrame>(4096);
     tokio::spawn(mqtt::run(settings.mqtt.clone(), raw_tx));
 
@@ -38,11 +40,12 @@ async fn main() -> anyhow::Result<()> {
     loop {
         tokio::select! {
             Some(raw) = raw_rx.recv() => {
-                let frame = match mavlink::decode(&raw) {
-                    Ok(f) => f,
-                    Err(err) => { tracing::warn!(%err, drone = %raw.drone_id, "dropping undecodable frame"); continue; }
+                let update = match mavlink::decode(&raw) {
+                    Ok(u) => u,
+                    Err(err) => { tracing::debug!(%err, drone = %raw.drone_id, "skipping message"); continue; }
                 };
-                let frame = enricher.enrich(frame).await;
+                let Some(decoded) = assembler.apply(&raw.drone_id, update, chrono::Utc::now()) else { continue };
+                let Some(frame) = enricher.enrich(decoded).await else { continue };
                 window.push(frame.clone());
                 if let Err(err) = producer.publish(&frame).await {
                     tracing::error!(%err, "kafka publish failed");
