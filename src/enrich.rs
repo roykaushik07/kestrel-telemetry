@@ -34,7 +34,13 @@ impl Enricher {
 
     async fn lookup(&self, drone_id: &str) -> Option<String> {
         let url = format!("{}/internal/v1/drones/{}/active-mission", self.base, drone_id);
-        let resp = self.http.get(url).send().await.ok()?;
+        let resp = match self.http.get(url).send().await {
+            Ok(r) => r,
+            Err(err) => {
+                tracing::debug!(%err, drone_id, "dispatch lookup failed");
+                return None;
+            }
+        };
         if !resp.status().is_success() {
             return None;
         }
