@@ -1,0 +1,5 @@
+[kafka]
+linger_ms = 10
+
+[api]
+window_secs = 600
