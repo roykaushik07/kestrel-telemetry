@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kestrel-telemetry-config
+data:
+  KESTREL__KAFKA__TOPIC: drone.telemetry.v2
+  KESTREL__API__WINDOW_SECS: "600"

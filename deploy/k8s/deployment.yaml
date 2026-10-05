@@ -24,6 +24,9 @@ spec:
               value: production
             - name: RUST_LOG
               value: info
+          envFrom:
+            - configMapRef:
+                name: kestrel-telemetry-config
           readinessProbe:
             httpGet:
               path: /healthz
