@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kestrel-telemetry
+  labels:
+    app: kestrel-telemetry
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: kestrel-telemetry
+  template:
+    metadata:
+      labels:
+        app: kestrel-telemetry
+    spec:
+      containers:
+        - name: kestrel-telemetry
+          image: ghcr.io/roykaushik07/kestrel-telemetry:0.11.4
+          ports:
+            - containerPort: 9090
+          env:
+            - name: KESTREL_ENV
+              value: production
+            - name: RUST_LOG
+              value: info
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 9090
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
