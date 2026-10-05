@@ -32,6 +32,10 @@ impl HotWindow {
         self.frames.lock().unwrap().get(drone_id).map(|r| r.iter().cloned().collect())
     }
 
+    pub fn latest(&self, drone_id: &str) -> Option<TelemetryFrame> {
+        self.frames.lock().unwrap().get(drone_id).and_then(|r| r.back().cloned())
+    }
+
     pub fn latest_all(&self) -> Vec<TelemetryFrame> {
         self.frames.lock().unwrap().values().filter_map(|r| r.back().cloned()).collect()
     }
@@ -42,6 +46,7 @@ pub async fn serve(bind: &str, window: Arc<HotWindow>) -> std::io::Result<()> {
         .route("/healthz", get(|| async { "ok" }))
         .route("/v1/drones", get(list_latest))
         .route("/v1/drones/:id/track", get(track))
+        .route("/internal/v1/drones/:id/latest", get(latest))
         .with_state(window);
     let listener = tokio::net::TcpListener::bind(bind).await?;
     axum::serve(listener, app).await
@@ -56,4 +61,12 @@ async fn track(
     Path(id): Path<String>,
 ) -> Result<Json<Vec<TelemetryFrame>>, StatusCode> {
     w.recent(&id).map(Json).ok_or(StatusCode::NOT_FOUND)
+}
+
+/// Newest frame in the hot window; dispatch polls this for deviation checks.
+async fn latest(
+    State(w): State<Arc<HotWindow>>,
+    Path(id): Path<String>,
+) -> Result<Json<TelemetryFrame>, StatusCode> {
+    w.latest(&id).map(Json).ok_or(StatusCode::NOT_FOUND)
 }
