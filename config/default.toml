@@ -1,0 +1,15 @@
+[mqtt]
+broker = "mqtts://mqtt.kestrel-air.net:8883"
+client_id = "kestrel-telemetry"
+
+[kafka]
+brokers = "b-1.kestrel-msk.x1y2z3.c4.kafka.eu-west-1.amazonaws.com:9094"
+topic = "drone.telemetry.v2"
+linger_ms = 20
+
+[dispatch]
+url = "https://dispatch.internal.kestrel-air.net"
+timeout_ms = 800
+
+[api]
+bind = "0.0.0.0:9090"
